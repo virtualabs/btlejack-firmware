@@ -2093,6 +2093,14 @@ int main() {
 
     /* Initalize Micro:Bit and serial link. */
     uBit.init();
+
+#ifdef YOTTA_CFG_TXPIN
+  #ifdef YOTTA_CFG_RXPIN
+    #pragma message("Btlejack firmware will use custom serial pins")
+    uBit.serial.redirect(YOTTA_CFG_TXPIN, YOTTA_CFG_RXPIN);
+  #endif
+#endif
+
     pLink = new Link(&uBit);
 
     /* Init BLE timer. */
