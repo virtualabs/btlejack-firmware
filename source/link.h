@@ -23,7 +23,8 @@ typedef enum {
   N_PACKET,
   N_CONNECT_REQ,
   N_PACKET_NORDIC,
-  N_HIJACK_STATUS
+  N_HIJACK_STATUS,
+  N_CONN_LOST
 } T_NOTIFICATION_TYPE, *PT_NOTIFICATION;
 
 /*
@@ -111,6 +112,7 @@ public:
     uint8_t direction,
     uint32_t delta,
     uint16_t eventCounter);
+  bool notifyConnectionLost(void);
 
   /* Helpers. */
   bool version(uint8_t major, uint8_t minor);

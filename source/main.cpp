@@ -101,6 +101,7 @@ typedef struct tSnifferState {
     uint16_t conn_evt_counter_update;
     uint16_t conn_lost_packets;
     uint16_t conn_transmit_window;
+    uint32_t max_lost_packets_allowed;
 
     /* sequence numbers. */
     uint8_t sn;
@@ -995,6 +996,7 @@ static void reset(void)
   g_sniffer.prev_time = 0L;
   g_sniffer.observed_interval = 0;
   g_sniffer.pkt_count = 0;
+  g_sniffer.max_lost_packets_allowed = 0;
 
   /* Reset channel map. */
   for (int i=0; i<37; i++)
@@ -1131,6 +1133,12 @@ static void sync_connection(void)
 {
   int channel;
 
+  /**
+   * Determine supervision timeout in number of packets.
+   * max_lost_packets_allowed = (2000ms / time spent on each channel in ms)
+   **/
+  g_sniffer.max_lost_packets_allowed = 2000 / (g_sniffer.hop_interval * 1.25);
+
   /* Reset connection update parameters. */
   g_sniffer.cp_update_instant = 0;
   g_sniffer.cp_update_hop_interval = 0;
@@ -1173,6 +1181,19 @@ static void sync_lost_track(void)
            reserved to passive sniffing !                                 */
 
   g_sniffer.conn_lost_packets++;
+
+  /* We are sniffing but are losing a lot of packets: synchronization failed. */
+  if ((g_sniffer.conn_lost_packets >= g_sniffer.max_lost_packets_allowed) && (g_sniffer.action == SYNC_CONNECT))
+  {
+    /* Send notification. */
+    pLink->notifyConnectionLost();
+
+    /* Stop sniffing. */
+
+  }
+
+
+  /* Jamming successful */
   if ((g_sniffer.conn_lost_packets >= 2) && g_sniffer.hijacking)
   {
     /**
@@ -1629,6 +1650,15 @@ static void follow_connection(void)
 {
     /* Stop any timer. */
     g_sniffer.ticker.detach();
+
+    /**
+     * Max lost packets allowed is very low here, to easily detect bad channel
+     * map or hop interval/increment values. Since we may fall by mistake on a
+     * used channel (that would reset the lost packets counter), we set up a
+     * quite low value to this parameter.
+     **/
+
+    g_sniffer.max_lost_packets_allowed = 6;
 
     /* Reset connection update parameters. */
     g_sniffer.cp_update_instant = 0;

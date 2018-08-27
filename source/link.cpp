@@ -126,7 +126,9 @@ bool Link::sendPacket(T_OPERATION tOperation, uint8_t *pData, int nCount, uint8_
   for (i=0; i<nCount; i++)
     checksum ^= pData[i];
 
-  m_serial->send(pData, nCount, ASYNC);
+  /* Only send data if we have data to send. */
+  if (nCount > 0)
+    m_serial->send(pData, nCount, ASYNC);
 
   /* Send checksum. */
   m_serial->send(&checksum, 1, ASYNC);
@@ -283,4 +285,9 @@ bool Link::notifyNordicTapBlePacket(
 
   /* Send notification. */
   return sendNotification(N_PACKET_NORDIC, m_nordic_tap, nPacketSize + NORDIC_TAP_HEADER_LEN);
+}
+
+bool Link::notifyConnectionLost(void)
+{
+  return sendNotification(N_CONN_LOST, NULL, 0);
 }
