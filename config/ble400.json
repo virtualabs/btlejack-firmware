@@ -1,4 +1,4 @@
 {
-	"rxpin": "P0_9",
-	"txpin": "P0_11"
+	"txpin": "P0_9",
+	"rxpin": "P0_11"
 }
