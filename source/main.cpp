@@ -116,7 +116,7 @@ typedef struct tSnifferState {
     bool hijacked;
     Ticker hj_ticker;
     int16_t hj_timer;
-    uint8_t hj_tries;
+    uint16_t hj_tries;
     bool send_pkt;
     bool pkt_sent;
 
@@ -1469,20 +1469,9 @@ static void hijack_hop_channel(void)
   /* Let's start hijacking. */
   g_sniffer.action = HIJACK_TX;
 
-  //pLink->verbose(B("HHC2"));
 
   /* Send buffer. */
   radio_send_rx(tx_buffer, 2, g_sniffer.channel);
-  //snprintf((char *)hexbuf, 20, "radio: %d", NRF_RADIO->STATE);
-  //pLink->verbose(hexbuf);
-
-  /* Next anchor is at hopInterval*1250 - delta. */
-  /*
-  g_sniffer.ticker.attach_us(
-    hijack_hop_channel,
-    g_sniffer.hop_interval*1250 - DRIFT
-  );
-  */
 }
 
 

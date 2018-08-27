@@ -372,14 +372,13 @@ void radio_send(uint8_t *pBuffer, int size)
 void radio_send_rx(uint8_t *pBuffer, int size, int channel)
 {
   int i;
-  #if 0
+
   /* Copy data to TX buffer. */
   if (pBuffer != tx_buffer)
   {
     for (i=2; i<size; i++)
       tx_buffer[i] = pBuffer[i];
   }
-  #endif
 
   /* No shorts on disable. */
   NRF_RADIO->SHORTS = 0x0;
