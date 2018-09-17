@@ -7,7 +7,7 @@
 #include "timer.h"
 
 #define VERSION_MAJOR   0x01
-#define VERSION_MINOR   0x02
+#define VERSION_MINOR   0x03
 
 #define MAX_QUEUE_LEN   10
 #define PKT_SIZE        10  /* Access Address + 2 bytes PDU + CRC */
@@ -17,6 +17,7 @@
 #define HIJACK_SUCCESS  0
 #define HIJACK_ERROR    1
 #define HIJACK_MAX_TRIES_BEFORE_FAILURE 300
+#define CHM_TIMEOUT     4000
 
 #define DIVIDE_ROUND(N, D) ((N) + (D)/2) / (D)
 
@@ -121,6 +122,7 @@ typedef struct tSnifferState {
     bool pkt_sent;
 
     /* Collaborative Channel mapping */
+    uint32_t cchm_timeout;
     uint8_t cchm_start;
     uint8_t cchm_stop;
 
@@ -1013,6 +1015,9 @@ static void reset(void)
   g_sniffer.conn_transmit_window = 0;
   g_sniffer.conn_evt_counter = 0;
 
+  /* Default channel map recovery timeout (in ms) */
+  //g_sniffer.cchm_timeout = CHM_TIMEOUT;
+
   /* Reset timers. */
   g_sniffer.ticker.detach();
   g_sniffer.hj_ticker.detach();
@@ -1057,6 +1062,8 @@ static void recover_crcinit(uint32_t accessAddress)
 
 static void recover_hop(uint32_t accessAddress, uint32_t crcinit, uint8_t *chm)
 {
+  reset();
+
   /* Convert 5-byte chm into 37-byte array. */
   chm_to_array(chm, g_sniffer.chm);
 
@@ -1518,6 +1525,9 @@ static void cchm_tick(void)
     /* Stop ticker. */
     g_sniffer.ticker.detach();
 
+    /* We are not doing CCHM anymore. */
+    g_sniffer.action = IDLE;
+
     /* Notify the channel map. */
     pLink->notifyChannelMap(
       g_sniffer.access_address,
@@ -1543,7 +1553,7 @@ static void recover_chm_next()
     {
         g_sniffer.ticker.detach();
         //g_sniffer.ticker.attach_us(&chm_tick, 4000000);
-        g_sniffer.ticker.attach_us(&chm_tick,/*(unsigned int)g_sniffer.max_interval * 1250*/4000000);
+        g_sniffer.ticker.attach_us(&chm_tick,/*(unsigned int)g_sniffer.max_interval * 1250*/g_sniffer.cchm_timeout * 1000);
         //g_sniffer.ticker.attach_us(chm_tick,/*(unsigned int)g_sniffer.max_interval * 1250*/4000000);
     }
     chm_tick();
@@ -1555,7 +1565,7 @@ static void recover_cchm_next()
     {
         g_sniffer.ticker.detach();
         //g_sniffer.ticker.attach_us(&chm_tick, 4000000);
-        g_sniffer.ticker.attach_us(cchm_tick,/*(unsigned int)g_sniffer.max_interval * 1250*/4000000);
+        g_sniffer.ticker.attach_us(cchm_tick,/*(unsigned int)g_sniffer.max_interval * 1250*/g_sniffer.cchm_timeout * 1000);
     }
     cchm_tick();
 }
@@ -1575,7 +1585,7 @@ static void recover_chm()
     /* Set our timer. */
     g_sniffer.channel = 0;
     radio_follow_aa(g_sniffer.access_address, g_sniffer.channel, g_sniffer.crcinit);
-    g_sniffer.ticker.attach_us(&chm_tick, /*g_sniffer.max_interval * 1250*/4000000);
+    g_sniffer.ticker.attach_us(&chm_tick, /*g_sniffer.max_interval * 1250*/g_sniffer.cchm_timeout * 1000);
 }
 
 static void recover_crc(uint32_t access_address)
@@ -1646,8 +1656,10 @@ static void follow_connection(void)
      * used channel (that would reset the lost packets counter), we set up a
      * quite low value to this parameter.
      **/
-
-    g_sniffer.max_lost_packets_allowed = 6;
+    if (g_sniffer.jamming == 0)
+      g_sniffer.max_lost_packets_allowed = 6;
+    else
+      g_sniffer.max_lost_packets_allowed = 37;
 
     /* Reset connection update parameters. */
     g_sniffer.cp_update_instant = 0;
@@ -1727,7 +1739,7 @@ void start_cchm(uint32_t accessAddress, uint32_t crcInit)
   );
 
   g_sniffer.ticker.detach();
-  g_sniffer.ticker.attach_us(cchm_tick,/*(unsigned int)g_sniffer.max_interval * 1250*/4000000);
+  g_sniffer.ticker.attach_us(cchm_tick,/*(unsigned int)g_sniffer.max_interval * 1250*/g_sniffer.cchm_timeout * 1000);
 
 }
 
@@ -1737,6 +1749,7 @@ void dispatchMessage(T_OPERATION op, uint8_t *payload, int nSize, uint8_t ubflag
   uint32_t crcInit;
   uint8_t chm[5];
   uint16_t hopInterval;
+  uint32_t timeout;
   int i;
 
   switch (op)
@@ -1845,7 +1858,7 @@ void dispatchMessage(T_OPERATION op, uint8_t *payload, int nSize, uint8_t ubflag
             /* Channel map recovery. */
             case 1:
               {
-                if (nSize != 10) /* Error, size does not match. */
+                if (nSize != 14) /* Error, size does not match. */
                   pLink->sendPacket(RECOVER, NULL, 0, 0);
                 else
                   {
@@ -1856,6 +1869,15 @@ void dispatchMessage(T_OPERATION op, uint8_t *payload, int nSize, uint8_t ubflag
                     /* Extract start and end channel */
                     g_sniffer.cchm_start = payload[8];
                     g_sniffer.cchm_stop = payload[9];
+
+                    /* Extract timeout */
+                    timeout = payload[10] | (payload[11] << 8) | (payload[12] << 16) | (payload[13] << 24);
+
+                    /* Update default timeout if specified. */
+                    if (timeout > 0)
+                      g_sniffer.cchm_timeout = timeout;
+                    else
+                      g_sniffer.cchm_timeout = CHM_TIMEOUT;
 
                     /* Check values */
                     if ((g_sniffer.cchm_stop > 37) || (g_sniffer.cchm_start > 37))
