@@ -569,7 +569,7 @@ extern "C" void RADIO_IRQHandler(void)
                       /* compute interval based on measures. */
                       curtime = measures;
                       inter = (curtime - g_sniffer.prev_time);
-                      if (inter > 2)
+                      if (inter > 216)
                       {
                           g_sniffer.prev_time = curtime;
                           if ((inter/37) != (g_sniffer.observed_interval/37))
