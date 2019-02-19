@@ -1473,45 +1473,6 @@ static void sync_lost_track(void)
 
   g_sniffer.conn_lost_packets++;
 
-  /* CSA2 attempt: resync on 2 channels further.  */
-  if (g_sniffer.csa == CSA_BLE5)
-  {
-    g_sniffer.sg->getNextChannel();
-    g_sniffer.channel = g_sniffer.sg->getNextChannel();
-
-    /* Need to synchronize again. */
-    g_sniffer.synced = false;
-
-    /* Timeout callback. */
-    g_sniffer.ticker.attach_us(
-      sync_lost_track,
-      (5*g_sniffer.hop_interval) * 1250
-    );
-
-    g_sniffer.conn_evt_counter+=2;
-    g_sniffer.conn_evt_pkt_counter = 0;
-
-    /* Go listening on the new channel. */
-    NVIC_DisableIRQ(RADIO_IRQn);
-    NRF_RADIO->EVENTS_DISABLED = 0;
-    NRF_RADIO->TASKS_DISABLE = 1;
-    while (NRF_RADIO->EVENTS_DISABLED == 0);
-
-    NRF_RADIO->FREQUENCY = channel_to_freq(g_sniffer.channel);
-    NRF_RADIO->DATAWHITEIV = g_sniffer.channel;
-
-    NVIC_ClearPendingIRQ(RADIO_IRQn);
-    NVIC_EnableIRQ(RADIO_IRQn);
-
-    // enable receiver
-    NRF_RADIO->SHORTS = RADIO_SHORTS_READY_START_Msk;
-
-    // enable receiver (once enabled, it will listen)
-    NRF_RADIO->EVENTS_READY = 0;
-    NRF_RADIO->EVENTS_END = 0;
-    NRF_RADIO->TASKS_RXEN = 1;
-  }
-
   /* We are sniffing but are losing a lot of packets: synchronization failed. */
   if ((g_sniffer.conn_lost_packets >= g_sniffer.max_lost_packets_allowed) && (g_sniffer.action == SYNC_CONNECT))
   {
@@ -1552,6 +1513,8 @@ static void sync_lost_track(void)
     g_sniffer.hj_ticker.detach();
     i = hops/(g_sniffer.hop_interval);
     remaining = (i+1)*g_sniffer.hop_interval - hops;
+    uint8_t hexbuf[20];
+    // BLE4: ~ 56
     //snprintf((char *)hexbuf, 20, "i: %d", remaining);
     //pLink->verbose(hexbuf);
 
@@ -1632,6 +1595,43 @@ static void sync_lost_track(void)
   else {
     if (g_sniffer.csa != CSA_BLE5)
       sync_hop_channel();
+    else
+    {
+      //g_sniffer.sg->getNextChannel();
+      g_sniffer.channel = g_sniffer.sg->getNextChannel();
+
+      /* Need to synchronize again. */
+      g_sniffer.synced = false;
+
+      /* Timeout callback. */
+      g_sniffer.ticker.attach_us(
+        sync_lost_track,
+        (g_sniffer.hop_interval+1) * 1250
+      );
+
+      g_sniffer.conn_evt_counter+=2;
+      g_sniffer.conn_evt_pkt_counter = 0;
+
+      /* Go listening on the new channel. */
+      NVIC_DisableIRQ(RADIO_IRQn);
+      NRF_RADIO->EVENTS_DISABLED = 0;
+      NRF_RADIO->TASKS_DISABLE = 1;
+      while (NRF_RADIO->EVENTS_DISABLED == 0);
+
+      NRF_RADIO->FREQUENCY = channel_to_freq(g_sniffer.channel);
+      NRF_RADIO->DATAWHITEIV = g_sniffer.channel;
+
+      NVIC_ClearPendingIRQ(RADIO_IRQn);
+      NVIC_EnableIRQ(RADIO_IRQn);
+
+      // enable receiver
+      NRF_RADIO->SHORTS = RADIO_SHORTS_READY_START_Msk;
+
+      // enable receiver (once enabled, it will listen)
+      NRF_RADIO->EVENTS_READY = 0;
+      NRF_RADIO->EVENTS_END = 0;
+      NRF_RADIO->TASKS_RXEN = 1;
+    }
   }
 }
 
