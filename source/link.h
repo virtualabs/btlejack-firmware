@@ -24,7 +24,8 @@ typedef enum {
   N_CONNECT_REQ,
   N_PACKET_NORDIC,
   N_HIJACK_STATUS,
-  N_CONN_LOST
+  N_CONN_LOST,
+  N_CSA2_PRNG
 } T_NOTIFICATION_TYPE, *PT_NOTIFICATION;
 
 /*
@@ -113,6 +114,7 @@ public:
     uint32_t delta,
     uint16_t eventCounter);
   bool notifyConnectionLost(void);
+  bool notifyCsa2PrngState(uint32_t accessAddress, uint32_t prngState);
 
   /* Helpers. */
   bool version(uint8_t major, uint8_t minor);

@@ -291,3 +291,16 @@ bool Link::notifyConnectionLost(void)
 {
   return sendNotification(N_CONN_LOST, NULL, 0);
 }
+
+bool Link::notifyCsa2PrngState(uint32_t accessAddress, uint32_t prngState)
+{
+  uint8_t buffer[8];
+  uint32_t *paa = (uint32_t *)&buffer[0];
+  uint32_t *pprng = (uint32_t *)&buffer[4];
+
+  *paa = accessAddress;
+  *pprng = prngState;
+
+  /* Send notification. */
+  return sendNotification(N_CSA2_PRNG, buffer, 8);
+}
