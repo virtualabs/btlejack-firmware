@@ -300,8 +300,11 @@ void radio_follow_conn(uint32_t accessAddress, int channel, uint32_t crcInit)
 
     // enable receiver (once enabled, it will listen)
     NRF_RADIO->EVENTS_READY = 0;
-    NRF_RADIO->EVENTS_END = 0;
     NRF_RADIO->TASKS_RXEN = 1;
+    while (NRF_RADIO->EVENTS_READY == 0);
+
+    NRF_RADIO->EVENTS_END = 0;
+    NRF_RADIO->TASKS_START = 1;
 }
 
 void radio_set_channel_fast(int channel)
@@ -323,8 +326,11 @@ void radio_set_channel_fast(int channel)
 
   // enable receiver (once enabled, it will listen)
   NRF_RADIO->EVENTS_READY = 0;
-  NRF_RADIO->EVENTS_END = 0;
   NRF_RADIO->TASKS_RXEN = 1;
+  while (NRF_RADIO->EVENTS_READY == 0);
+
+  NRF_RADIO->EVENTS_END = 0;
+  NRF_RADIO->TASKS_START = 1;
 }
 
 /**
@@ -358,8 +364,11 @@ void radio_send(uint8_t *pBuffer, int size)
   NRF_RADIO->SHORTS = RADIO_SHORTS_READY_START_Msk/* | RADIO_SHORTS_END_DISABLE_Msk*/;
 
   NRF_RADIO->EVENTS_READY = 0;
-  NRF_RADIO->EVENTS_END = 0;
   NRF_RADIO->TASKS_TXEN = 1;
+  while (NRF_RADIO->EVENTS_READY == 0);
+
+  NRF_RADIO->EVENTS_END = 0;
+  NRF_RADIO->TASKS_START = 1;
 
   /* From now, radio will send data and notify the result to Radio_IRQHandler */
 }
@@ -413,8 +422,11 @@ void radio_send_rx(uint8_t *pBuffer, int size, int channel)
   NRF_RADIO->SHORTS = RADIO_SHORTS_READY_START_Msk | RADIO_SHORTS_END_DISABLE_Msk  | RADIO_SHORTS_DISABLED_RXEN_Msk;
 
   NRF_RADIO->EVENTS_READY = 0;
-  NRF_RADIO->EVENTS_END = 0;
   NRF_RADIO->TASKS_TXEN = 1;
+  while (NRF_RADIO->EVENTS_READY == 0);
+
+  NRF_RADIO->EVENTS_END = 0;
+  NRF_RADIO->TASKS_START = 1;
 
   /* From now, radio will send data and notify the result to Radio_IRQHandler */
 }
@@ -440,6 +452,9 @@ void radio_anchor_receive(void)
   NRF_RADIO->SHORTS = RADIO_SHORTS_READY_START_Msk | RADIO_SHORTS_END_DISABLE_Msk | RADIO_SHORTS_DISABLED_TXEN_Msk;
 
   NRF_RADIO->EVENTS_READY = 0;
-  NRF_RADIO->EVENTS_END = 0;
   NRF_RADIO->TASKS_RXEN = 1;
+  while (NRF_RADIO->EVENTS_READY == 0);
+
+  NRF_RADIO->EVENTS_END = 0;
+  NRF_RADIO->TASKS_START = 1;
 }
