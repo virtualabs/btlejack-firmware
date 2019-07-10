@@ -174,3 +174,19 @@ void array_to_chm(uint8_t *chmArray, uint8_t *chm)
 		chm[i/8] |= (chmArray[i]==1)?(1 << (i%8)):0;
 	}
 }
+
+void whiten(uint8_t *data, int len, int channel)
+{
+	dewhiten(data,len,channel);
+}
+
+uint32_t whiten_pattern(uint8_t *pattern,int size, int offset,int channel) {
+	uint8_t *payload = (uint8_t*)malloc(sizeof(uint8_t)*(size+offset));
+	for (int i=0;i<size;i++) {
+		if (i >= offset) payload[i] = pattern[i-offset];
+		else payload[i] = 0;
+	}
+	whiten(payload,size+offset,channel);
+	uint32_t output = (payload[offset] | (payload[offset+1] << 8) | (payload[offset+2] << 16) | (payload[offset+3] << 24));
+	return output;
+}

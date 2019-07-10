@@ -22,3 +22,4 @@ void radio_set_channel_fast(int channel);
 void radio_send(uint8_t *pBuffer, int size);
 void radio_send_rx(uint8_t *pBuffer, int size, int channel);
 void radio_receive(void);
+void radio_jam_advertisements(uint8_t *pattern,int size, int offset,int channel);

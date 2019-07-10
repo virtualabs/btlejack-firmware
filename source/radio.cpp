@@ -1,3 +1,4 @@
+#include "helpers.h"
 #include "radio.h"
 
 /**
@@ -296,7 +297,7 @@ void radio_follow_conn(uint32_t accessAddress, int channel, uint32_t crcInit)
     NVIC_ClearPendingIRQ(RADIO_IRQn);
     NVIC_EnableIRQ(RADIO_IRQn);
 
-    NRF_RADIO->SHORTS = RADIO_SHORTS_READY_START_Msk;
+    NRF_RADIO->SHORTS = RADIO_SHORTS_READY_START_Msk | RADIO_SHORTS_ADDRESS_RSSISTART_Msk; /* Enable RSSI Measurement. */
 
     // enable receiver (once enabled, it will listen)
     NRF_RADIO->EVENTS_READY = 0;
@@ -442,4 +443,72 @@ void radio_anchor_receive(void)
   NRF_RADIO->EVENTS_READY = 0;
   NRF_RADIO->EVENTS_END = 0;
   NRF_RADIO->TASKS_RXEN = 1;
+}
+
+
+
+void radio_jam_advertisements(uint8_t *pattern,int size, int offset,int channel)
+{
+    /* We generate a whitened pattern in order to use it as a preamble for the frames to jam. */
+    uint32_t accessAddress = whiten_pattern(pattern, size, offset, channel);
+
+    /* We reconfigure the radio to use our new parameters. */
+    radio_disable();
+
+    // Enable the High Frequency clock on the processor. This is a pre-requisite for
+    // the RADIO module. Without this clock, no communication is possible.
+    NRF_CLOCK->EVENTS_HFCLKSTARTED = 0;
+    NRF_CLOCK->TASKS_HFCLKSTART = 1;
+    while (NRF_CLOCK->EVENTS_HFCLKSTARTED == 0);
+
+    // power should be one of: -30, -20, -16, -12, -8, -4, 0, 4
+    NRF_RADIO->TXPOWER = (RADIO_TXPOWER_TXPOWER_Pos4dBm << RADIO_TXPOWER_TXPOWER_Pos);
+
+    /* Listen on channel 6 (2046 =index 1 in BLE). */
+    NRF_RADIO->FREQUENCY = channel_to_freq(channel);
+
+    /* Set BLE data rate. */
+    NRF_RADIO->MODE = (RADIO_MODE_MODE_Ble_1Mbit << RADIO_MODE_MODE_Pos);
+
+    /* Set default access address used on advertisement channels. */
+    NRF_RADIO->PREFIX0 = (accessAddress & 0xff000000)>>24;
+    NRF_RADIO->BASE0 = (accessAddress & 0x00ffffff)<<8;
+
+    NRF_RADIO->TXADDRESS = 0; // transmit on logical address 0
+    NRF_RADIO->RXADDRESSES = 1; // a bit mask, listen only to logical address 0
+
+    NRF_RADIO->PCNF0 = (
+    (((0UL) << RADIO_PCNF0_S0LEN_Pos) & RADIO_PCNF0_S0LEN_Msk) |  /* S0    */
+    (((0UL) << RADIO_PCNF0_S1LEN_Pos) & RADIO_PCNF0_S1LEN_Msk) |  /* S1    */
+    (((0UL) << RADIO_PCNF0_LFLEN_Pos) & RADIO_PCNF0_LFLEN_Msk)    /* Length  */
+    ); /* Everything is set to 0 to go as fast as possible. */
+
+
+    NRF_RADIO->PCNF1 = (
+    (((0UL) << RADIO_PCNF1_MAXLEN_Pos) & RADIO_PCNF1_MAXLEN_Msk)    | /* Max payload length. */
+    (((0UL) << RADIO_PCNF1_STATLEN_Pos) & RADIO_PCNF1_STATLEN_Msk)   |/* Expansion of payload length  */
+    (((3UL) << RADIO_PCNF1_BALEN_Pos) & RADIO_PCNF1_BALEN_Msk)       |/* Base address length */
+    (((RADIO_PCNF1_ENDIAN_Little) << RADIO_PCNF1_ENDIAN_Pos) & RADIO_PCNF1_ENDIAN_Msk) |  /* Endianess */
+    (((0UL) << RADIO_PCNF1_WHITEEN_Pos) & RADIO_PCNF1_WHITEEN_Msk)                         /* Whitening */
+    );
+
+    /* We disable CRC check. */
+    NRF_RADIO->CRCCNF  = 0;
+
+    // set receive buffer
+    NRF_RADIO->PACKETPTR = (uint32_t)rx_buffer;
+
+    // configure interrupts
+    NRF_RADIO->INTENSET = 0x00000008;
+
+    //NVIC_ClearPendingIRQ(RADIO_IRQn);
+    NVIC_EnableIRQ(RADIO_IRQn);
+
+    /* Will enable START when ready, disable when packet received, and txen when disabled. */
+    NRF_RADIO->SHORTS = RADIO_SHORTS_READY_START_Msk | RADIO_SHORTS_END_DISABLE_Msk | RADIO_SHORTS_DISABLED_TXEN_Msk;
+
+    // enable receiver (once enabled, it will listen)
+    NRF_RADIO->EVENTS_READY = 0;
+    NRF_RADIO->EVENTS_END = 0;
+    NRF_RADIO->TASKS_RXEN = 1;
 }

@@ -8,6 +8,16 @@
 #define PKT_NOTIFICATION  0x04
 #define MAX_PACKET_SIZE  0x0110
 #define NORDIC_TAP_HEADER_LEN 0x0A
+#define ADV_HEADER_LEN 0x04
+
+// Advertisements commands opcodes
+#define ADVERTISEMENTS_OPCODE_RESET_POLICY 	0x00
+#define ADVERTISEMENTS_OPCODE_GET_POLICY 	0x01
+#define ADVERTISEMENTS_OPCODE_ADD_RULE  	0x02
+#define ADVERTISEMENTS_OPCODE_ENABLE_SNIFF  	0x03
+#define ADVERTISEMENTS_OPCODE_DISABLE_SNIFF  	0x04
+#define ADVERTISEMENTS_OPCODE_ENABLE_JAMMING  	0x05
+#define ADVERTISEMENTS_OPCODE_DISABLE_JAMMING  	0x06
 
 typedef enum {
   LK_WAITING,
@@ -24,7 +34,8 @@ typedef enum {
   N_CONNECT_REQ,
   N_PACKET_NORDIC,
   N_HIJACK_STATUS,
-  N_CONN_LOST
+  N_CONN_LOST,
+  N_ADV
 } T_NOTIFICATION_TYPE, *PT_NOTIFICATION;
 
 /*
@@ -46,6 +57,7 @@ typedef enum {
   RECOVER_AA_CHM_HOPINTER, /* 0x06 */
 #endif
   RECOVER, /* 0x04 */
+  ADVERTISEMENTS, /* 0x05 */
   SNIFF_CONREQ=0x07, /* 0x07 */
   ENABLE_JAMMING, /* 0x08 */
   ENABLE_HIJACKING, /* 0x09 */
@@ -113,8 +125,15 @@ public:
     uint32_t delta,
     uint16_t eventCounter);
   bool notifyConnectionLost(void);
+  bool notifyAdvertisementPacket(
+    uint8_t *pPacket,
+    int nPacketSize,
+    uint8_t channel,
+    uint8_t crc_ok,
+    uint8_t rssi);
 
   /* Helpers. */
+  bool sendAdvertisementResponse(uint8_t advOpcode,uint8_t *pData, int nCount);
   bool version(uint8_t major, uint8_t minor);
   bool debug(uint8_t *pData);
   bool verbose(uint8_t *pData);

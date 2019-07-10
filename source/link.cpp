@@ -136,7 +136,6 @@ bool Link::sendPacket(T_OPERATION tOperation, uint8_t *pData, int nCount, uint8_
   return true;
 }
 
-
 bool Link::sendNotification(T_NOTIFICATION_TYPE tNotification, uint8_t *pData, int nCount)
 {
   return sendPacket((T_OPERATION)tNotification, pData, nCount, PKT_NOTIFICATION);
@@ -167,6 +166,13 @@ bool Link::version(uint8_t major, uint8_t minor)
   return sendPacket(VERSION, buffer, 2, PKT_RESPONSE);
 }
 
+bool Link::sendAdvertisementResponse(uint8_t advOpcode,uint8_t *pData, int nCount) {
+	uint8_t buffer[nCount+1];
+	buffer[0] = advOpcode;
+	for (int i=0;i<nCount;i++) buffer[1+i] = pData[i];
+	return sendPacket(ADVERTISEMENTS,buffer,nCount+1, PKT_COMMAND | PKT_RESPONSE);
+
+}
 
 bool Link::notifyAccessAddress(uint32_t accessAddress, int channel, uint8_t rssi)
 {
@@ -285,6 +291,29 @@ bool Link::notifyNordicTapBlePacket(
 
   /* Send notification. */
   return sendNotification(N_PACKET_NORDIC, m_nordic_tap, nPacketSize + NORDIC_TAP_HEADER_LEN);
+}
+
+
+bool Link::notifyAdvertisementPacket(
+  uint8_t *pPacket,
+  int nPacketSize,
+  uint8_t channel,
+  uint8_t crc_ok,
+  uint8_t rssi)
+{
+  int i;
+
+  /* Format advertisement */
+  m_nordic_tap[0] = nPacketSize;
+  m_nordic_tap[1] = channel;
+  m_nordic_tap[2] = crc_ok;
+  m_nordic_tap[3] = rssi;
+
+  for (i=0; i<nPacketSize; i++)
+    m_nordic_tap[4+i] = pPacket[i];
+
+  /* Send notification. */
+  return sendNotification(N_ADV, m_nordic_tap, nPacketSize + ADV_HEADER_LEN);
 }
 
 bool Link::notifyConnectionLost(void)
