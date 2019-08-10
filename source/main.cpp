@@ -670,9 +670,6 @@ extern "C" void RADIO_IRQHandler(void)
                               g_sniffer.n = 0;
 
                               /* Compute interval. */
-                              //snprintf((char *)hexbuf, 20, (char *)"inter: %08x", (uint32_t)inter);
-                              //pLink->verbose(hexbuf);
-
                           } else {
                               g_sniffer.n++;
                               if (g_sniffer.n >= 2) /* was 5 */
@@ -848,7 +845,9 @@ extern "C" void RADIO_IRQHandler(void)
               /* CRC must be correct. */
               if ((NRF_RADIO->CRCSTATUS == 1))
               {
+
                 //pLink->verbose(B("."));
+
                 /* Update connection event packet counter. */
                 g_sniffer.conn_evt_pkt_counter++;
 
@@ -871,7 +870,11 @@ extern "C" void RADIO_IRQHandler(void)
                   /* We got a valid packet, consider sniffer synchronized with the
                      master. This is an anchor point, we set up a timer to change
                      channel for the next anchor point. */
-                  set_timer_for_next_anchor((g_sniffer.hop_interval - 1)*1250);
+                  if (g_sniffer.csa == CSA_LEGACY)
+                    set_timer_for_next_anchor((g_sniffer.hop_interval - 1)*1250);
+                  else
+                    set_timer_for_next_anchor((g_sniffer.hop_interval - 1)*1250);
+
                   g_sniffer.synced = true;
 
                   /* If jamming is enabled, prepare buffer, disable rx and switch on tx. */
@@ -925,6 +928,9 @@ extern "C" void RADIO_IRQHandler(void)
                     g_sniffer.cp_update_hop_interval  = (rx_buffer[0x06] | (rx_buffer[0x07] << 8));
                     g_sniffer.cp_update_instant = (rx_buffer[0x0C] | (rx_buffer[0x0D] << 8));
 
+                    /* And update connection transmit window as well. */
+                    g_sniffer.conn_transmit_window = (rx_buffer[3] + (rx_buffer[4] | rx_buffer[5]<<8));
+
                     /* Ask for update at the given instant. */
                     g_sniffer.expect_cp_update = true;
                   }
@@ -943,7 +949,6 @@ extern "C" void RADIO_IRQHandler(void)
                   }
 
                   /* Report LL data, header included. */
-                  //pLink->notifyBlePacket(rx_buffer, (int)rx_buffer[1] + 2);
                   pLink->notifyNordicTapBlePacket(
                     rx_buffer,
                     (int)rx_buffer[1] + 2,
@@ -969,9 +974,9 @@ extern "C" void RADIO_IRQHandler(void)
               /* CRC must be correct. */
               if ((NRF_RADIO->CRCSTATUS == 1))
               {
+
                 if (!g_sniffer.ble5_hop_counting)
                 {
-
                   g_sniffer.ble5_hop_counting = true;
                   //g_sniffer.ble5_hop_counter = 0;
                   g_sniffer.ble5_hop_n = 0;
@@ -1036,8 +1041,8 @@ extern "C" void RADIO_IRQHandler(void)
                 else
                 {
                   //g_sniffer.ble5_ticker.detach();
-                  snprintf(msg,20, "ctr: %d/%d", g_sniffer.ble5_hop_counter, g_sniffer.ble5_previous_counter);
-                  pLink->verbose(B(msg));
+                  //snprintf(msg,20, "ctr: %d/%d", g_sniffer.ble5_hop_counter, g_sniffer.ble5_previous_counter);
+                  //pLink->verbose(B(msg));
 
                   /* SAve */
                   g_sniffer.ble5_hops[g_sniffer.ble5_hop_n++] = DIVIDE_ROUND(g_sniffer.ble5_hop_counter,g_sniffer.hop_interval);
@@ -1060,12 +1065,16 @@ extern "C" void RADIO_IRQHandler(void)
                     /* We got enough captures, deduce PRNG counter and synchronize. */
                     int n = g_sniffer.sg->resolveCounter(g_sniffer.ble5_hops, g_sniffer.ble5_previous_counter-4, g_sniffer.channel);
 
-                    /* Notify new state. */
-                    pLink->notifyCsa2PrngState(g_sniffer.access_address, g_sniffer.ble5_hops[0]);
+                    //snprintf(msg,20, "candidates: %d", n);
+                    //pLink->verbose(B(msg));
 
                     /* Synchronize connection with actual counter. */
                     g_sniffer.conn_transmit_window = g_sniffer.hop_interval;
                     follow_connection();
+
+                    /* Notify new state. */
+                    pLink->notifyCsa2PrngState(g_sniffer.access_address, g_sniffer.ble5_hops[0]);
+
 
                     //g_sniffer.max_lost_packets_allowed = 37;
                   }
@@ -1467,7 +1476,6 @@ static void sync_lost_track(void)
   uint32_t remaining;
   char msg[30];
 
-
   /* TODO: switch chm based on instant rather than errors, this should be
            reserved to passive sniffing !                                 */
 
@@ -1510,12 +1518,14 @@ static void sync_lost_track(void)
     g_sniffer.hijacking = false;
 
     /* Compute the remaining time before next anchor. */
+
     g_sniffer.hj_ticker.detach();
     i = hops/(g_sniffer.hop_interval);
     remaining = (i+1)*g_sniffer.hop_interval - hops;
-    uint8_t hexbuf[20];
+    //uint8_t hexbuf[20];
+
     // BLE4: ~ 56
-    //snprintf((char *)hexbuf, 20, "i: %d", remaining);
+    //snprintf((char *)hexbuf, 20, "i: %d (%d)", remaining, hops);
     //pLink->verbose(hexbuf);
 
     /* Will reactivate radio later ! */
@@ -1524,6 +1534,7 @@ static void sync_lost_track(void)
       (remaining*1250 - 360)
     );
 
+    //start_hijack();
     return;
   }
 
@@ -1548,7 +1559,7 @@ static void sync_lost_track(void)
     /* Timeout callback. */
     g_sniffer.ticker.attach_us(
       sync_lost_track,
-      (g_sniffer.hop_interval - 1) * 1250
+      (g_sniffer.hop_interval-1) * 1250
     );
 
     /* Compute next channel. */
@@ -1606,10 +1617,10 @@ static void sync_lost_track(void)
       /* Timeout callback. */
       g_sniffer.ticker.attach_us(
         sync_lost_track,
-        (g_sniffer.hop_interval+1) * 1250
+        (g_sniffer.hop_interval-1) * 1250
       );
 
-      g_sniffer.conn_evt_counter+=2;
+      g_sniffer.conn_evt_counter = g_sniffer.sg->getFirstChannel();
       g_sniffer.conn_evt_pkt_counter = 0;
 
       /* Go listening on the new channel. */
@@ -1654,12 +1665,23 @@ static void sync_hop_channel(void)
 
   /* Compute next channel. */
   g_sniffer.channel = g_sniffer.sg->getNextChannel();
-  g_sniffer.conn_evt_counter++;
+  if (g_sniffer.csa != CSA_BLE5)
+    g_sniffer.conn_evt_counter++;
+  else
+    g_sniffer.conn_evt_counter = g_sniffer.sg->getFirstChannel();
   g_sniffer.conn_evt_pkt_counter = 0;
 
   /* Do we need to update connection parameters ? */
   if (g_sniffer.expect_cp_update && (g_sniffer.cp_update_instant <= g_sniffer.conn_evt_counter))
   {
+      uint8_t hexbuf[20];
+      snprintf((char *)hexbuf, 20, "evtctr: %d", g_sniffer.conn_evt_counter);
+      pLink->verbose(hexbuf);
+
+      /* resync our connection event counter with current counter (only for CSA#2) */
+      if (g_sniffer.csa == CSA_BLE5)
+        g_sniffer.conn_evt_counter = g_sniffer.sg->getFirstChannel();
+
       /* Update hop interval. */
       g_sniffer.hop_interval = g_sniffer.cp_update_hop_interval;
 
@@ -1675,10 +1697,17 @@ static void sync_hop_channel(void)
   } else {
 
     /* Set timeout to (hop_interval - 1). */
+    if (g_sniffer.csa == CSA_LEGACY){
     g_sniffer.ticker.attach_us(
       sync_lost_track,
-      (g_sniffer.hop_interval - 1) * 1250
+      (g_sniffer.hop_interval-1) * 1250
     );
+  } else {
+    g_sniffer.ticker.attach_us(
+      sync_lost_track,
+      (g_sniffer.hop_interval) * 1250 -140
+    );
+  }
   }
 
   /* Go listening on the new channel. */
@@ -2491,7 +2520,6 @@ void dispatchMessage(T_OPERATION op, uint8_t *payload, int nSize, uint8_t ubflag
                   }
               }
               break;
-
           }
         }
         else

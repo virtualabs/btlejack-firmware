@@ -1,3 +1,8 @@
+/**
+ * This whole module needs code refactoring, I know. But since the BLE 5 support is still
+ * "experimental", I'll do some cleaning later. I promise.
+ **/
+
 #include "sequence.h"
 
 int LegacySequenceGenerator::findChannelIndex(int hopIncrement, int channel, int start)
@@ -258,7 +263,7 @@ LegacySequenceGenerator::LegacySequenceGenerator()
 }
 
 uint8_t LegacySequenceGenerator::get_channel(uint16_t counter){
-  return 0;
+  return (counter)%37;
 }
 
 int LegacySequenceGenerator::resolveCounter(uint32_t *measures, int count, uint8_t channel){return 0;}
@@ -283,7 +288,6 @@ uint16_t Ble5SequenceGenerator::permute(uint16_t v)
   v = (((v & 0xaaaa) >> 1) | ((v & 0x5555) << 1));
   v = (((v & 0xcccc) >> 2) | ((v & 0x3333) << 2));
   return (((v & 0xf0f0) >> 4) | ((v & 0x0f0f) << 4));
-  //return (((v & 0xff00) >> 8) | ((v & 0x00ff) << 8));
 }
 
 uint16_t Ble5SequenceGenerator::mam(uint16_t a, uint16_t b)
@@ -379,7 +383,8 @@ int Ble5SequenceGenerator::getCurrentChannel(void)
 
 int Ble5SequenceGenerator::getFirstChannel(void)
 {
-  return 0;
+  /* This is an ugly hack. I have to admit. */
+  return (int)m_counter;
 }
 int Ble5SequenceGenerator::getSecondChannel(void)
 {
@@ -418,7 +423,7 @@ int Ble5SequenceGenerator::resolveCounter(uint32_t *measures, int count, uint8_t
   {
     /* Compute the next value of the counter, adding the total number of hops
      * as it was measured in the last measure we made. */
-    m_counter = ((last_counter + measures[4])%65536) + 1 + 14;
+    m_counter = ((last_counter + measures[4])%65536) + 1 + 12;
     measures[0] = last_counter;
 
     /* We are ready to synchronize now :) */
