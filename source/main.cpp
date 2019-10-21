@@ -64,6 +64,12 @@ typedef enum {
     PRNG
 } current_action_t;
 
+typedef enum {
+  FOLLOW_ADV_DISABLED,
+  FOLLOW_ADV_CALIB,
+  FOLLOW_ADV_TRACK
+} follow_adv_t;
+
 typedef struct tSnifferState {
     current_action_t action;
 
@@ -85,6 +91,9 @@ typedef struct tSnifferState {
 
     /* Connection request sync. */
     uint8_t bd_address[6];
+    bool follow_advert;
+    follow_adv_t follow_advert_state = FOLLOW_ADV_DISABLED;
+    uint32_t follow_adv_interval = 0;
 
     /* Connection parameters update. */
     bool expect_cp_update;
@@ -142,7 +151,7 @@ typedef struct tSnifferState {
     bool hijacking;
     bool hijacked;
     Ticker hj_ticker;
-    Ticker ble5_ticker;;
+    Ticker ble5_ticker;
     int16_t hj_timer;
     uint16_t hj_tries;
     bool send_pkt;
@@ -220,6 +229,41 @@ void hop_tick()
 {
     measures++;
 }
+
+void next_adv_channel(void)
+{
+  g_sniffer.ticker.detach();
+  if ((g_sniffer.channel >= 37) && (g_sniffer.channel <=39))
+  {
+    /* Compute next channel. */
+    g_sniffer.channel = ((g_sniffer.channel - 37 + 1)%3) + 37;
+
+    /* Listen on this new channel, takes ~138us to switch. */
+    //radio_follow_conn(0x8E89BED6, g_sniffer.channel, 0x555555);
+    /* Go listening on the new channel. */
+    NVIC_DisableIRQ(RADIO_IRQn);
+    NRF_RADIO->EVENTS_DISABLED = 0;
+    NRF_RADIO->TASKS_DISABLE = 1;
+    while (NRF_RADIO->EVENTS_DISABLED == 0);
+
+    NRF_RADIO->FREQUENCY = channel_to_freq(g_sniffer.channel);
+    NRF_RADIO->DATAWHITEIV = g_sniffer.channel;
+
+    NVIC_ClearPendingIRQ(RADIO_IRQn);
+    NVIC_EnableIRQ(RADIO_IRQn);
+
+    // enable receiver
+    NRF_RADIO->SHORTS = RADIO_SHORTS_READY_START_Msk;
+
+    // enable receiver (once enabled, it will listen)
+    NRF_RADIO->EVENTS_READY = 0;
+    NRF_RADIO->EVENTS_END = 0;
+    NRF_RADIO->TASKS_RXEN = 1;
+  }
+  else
+    g_sniffer.channel = 37;
+}
+
 
 /* PGCD implementation */
 uint16_t _gcd(uint16_t a, uint16_t b)
@@ -797,6 +841,9 @@ extern "C" void RADIO_IRQHandler(void)
                     )
                   {
 
+                    /* Disable adv follow timer. */
+                    g_sniffer.ticker.detach();
+
                     /* Extract access address. */
                     aa = (uint32_t *)&rx_buffer[0x0E];
                     g_sniffer.access_address = *aa;
@@ -829,9 +876,131 @@ extern "C" void RADIO_IRQHandler(void)
                     /* Synchronize with master. */
                     sync_connection();
 
+                    //snprintf((char*)msg, 3, "%d", g_sniffer.channel);
+                    //pLink->verbose((uint8_t *)msg);
+
                     /* Report CONNECT_REQ packet. */
                     pLink->notifyConnectionPacket(rx_buffer, (int)rx_buffer[1] + 2);
                   }
+                }
+                else
+                {
+                  /* Is it an advertisement from our target ? If so, let's set up a timout
+                     of T_IFS + 272us in order for a CONNECT_REQ to be received.
+                     We are looking for ADV_IND and ADV_DIRECT_IND.
+                  */
+                  if (
+                    ((rx_buffer[0] & 0x0F) < 2) &&
+                    (rx_buffer[0x02] == g_sniffer.bd_address[0]) &&
+                    (rx_buffer[0x03] == g_sniffer.bd_address[1]) &&
+                    (rx_buffer[0x04] == g_sniffer.bd_address[2]) &&
+                    (rx_buffer[0x05] == g_sniffer.bd_address[3]) &&
+                    (rx_buffer[0x06] == g_sniffer.bd_address[4]) &&
+                    (rx_buffer[0x07] == g_sniffer.bd_address[5]))
+                  {
+                    if (g_sniffer.follow_advert && (g_sniffer.follow_advert_state == FOLLOW_ADV_CALIB) && (g_sniffer.channel == 37))
+                    {
+                      pLink->verbose(B("I"));
+                      /* Advertisement on channel 37, sit on 39 and wait for advertisement. */
+                      measures = 0;
+                      g_sniffer.ticker.attach_us(hop_tick,20);
+
+                      g_sniffer.channel = 39;
+
+                      /* Switch to channel 39. */
+                      NVIC_DisableIRQ(RADIO_IRQn);
+                      NRF_RADIO->EVENTS_DISABLED = 0;
+                      NRF_RADIO->TASKS_DISABLE = 1;
+                      while (NRF_RADIO->EVENTS_DISABLED == 0);
+
+                      NRF_RADIO->FREQUENCY = channel_to_freq(g_sniffer.channel);
+                      NRF_RADIO->DATAWHITEIV = g_sniffer.channel;
+
+                      NVIC_ClearPendingIRQ(RADIO_IRQn);
+                      NVIC_EnableIRQ(RADIO_IRQn);
+
+                      // enable receiver
+                      NRF_RADIO->SHORTS = RADIO_SHORTS_READY_START_Msk;
+
+                      // enable receiver (once enabled, it will listen)
+                      NRF_RADIO->EVENTS_READY = 0;
+                      NRF_RADIO->EVENTS_END = 0;
+                      NRF_RADIO->TASKS_RXEN = 1;
+                    }
+                    else if (g_sniffer.follow_advert && (g_sniffer.follow_advert_state == FOLLOW_ADV_CALIB) && (g_sniffer.channel == 39))
+                    {
+                      g_sniffer.ticker.detach();
+
+                      /* Compute number of hops. */
+                      snprintf(msg, 20, "hops: %d", measures);
+                      pLink->verbose((uint8_t *)msg);
+
+                      /* Compute advertisement interval. */
+                      g_sniffer.follow_adv_interval = (measures*20)/2;
+                      g_sniffer.follow_advert_state = FOLLOW_ADV_TRACK;
+
+                      g_sniffer.channel = 37;
+
+                      /* Switch to channel 39. */
+                      NVIC_DisableIRQ(RADIO_IRQn);
+                      NRF_RADIO->EVENTS_DISABLED = 0;
+                      NRF_RADIO->TASKS_DISABLE = 1;
+                      while (NRF_RADIO->EVENTS_DISABLED == 0);
+
+                      NRF_RADIO->FREQUENCY = channel_to_freq(g_sniffer.channel);
+                      NRF_RADIO->DATAWHITEIV = g_sniffer.channel;
+
+                      NVIC_ClearPendingIRQ(RADIO_IRQn);
+                      NVIC_EnableIRQ(RADIO_IRQn);
+
+                      // enable receiver
+                      NRF_RADIO->SHORTS = RADIO_SHORTS_READY_START_Msk;
+
+                      // enable receiver (once enabled, it will listen)
+                      NRF_RADIO->EVENTS_READY = 0;
+                      NRF_RADIO->EVENTS_END = 0;
+                      NRF_RADIO->TASKS_RXEN = 1;
+
+                    }
+                    else if (g_sniffer.follow_advert && (g_sniffer.follow_advert_state == FOLLOW_ADV_TRACK))
+                    {
+                      //pLink->verbose(B("."));
+                      if (g_sniffer.channel < 39)
+                        g_sniffer.ticker.attach_us(next_adv_channel, g_sniffer.follow_adv_interval-138);
+                      else
+                      {
+                        //pLink->verbose(B("<"));
+                        /* Stop timer and switch to channel 37. */
+                        g_sniffer.ticker.detach();
+                        g_sniffer.channel = 37;
+                        radio_follow_conn(0x8E89BED6, g_sniffer.channel, 0x555555);
+                      }
+                    }
+                  }
+                  #if 0
+                  else
+                  {
+                    /* Is it an advertisement from our target ? If so, let's set up a timout
+                       of T_IFS + 272us in order for a CONNECT_REQ to be received.
+                       We are looking for ADV_IND and ADV_DIRECT_IND.
+                    */
+                    if (
+                      ((rx_buffer[0] & 0x0F) == 3) &&
+                      (rx_buffer[0x02] == g_sniffer.bd_address[0]) &&
+                      (rx_buffer[0x03] == g_sniffer.bd_address[1]) &&
+                      (rx_buffer[0x04] == g_sniffer.bd_address[2]) &&
+                      (rx_buffer[0x05] == g_sniffer.bd_address[3]) &&
+                      (rx_buffer[0x06] == g_sniffer.bd_address[4]) &&
+                      (rx_buffer[0x07] == g_sniffer.bd_address[5]))
+                    {
+                      pLink->verbose(B("SCAN"));
+                      /* Stay longer on this channel as the target device has to
+                         answer back. */
+                      g_sniffer.ticker.detach();
+                      g_sniffer.ticker.attach_us(next_adv_channel, 200);
+                    }
+                  }
+                  #endif
                 }
               }
 
@@ -1267,6 +1436,9 @@ static void reset(void)
   g_sniffer.direction = 0;
   g_sniffer.send_pkt = false;
   g_sniffer.pkt_sent = false;
+
+  /* Reset advertisement follow */
+  g_sniffer.follow_advert = false;
 }
 
 static void start_scanning(void)
@@ -1407,8 +1579,15 @@ static void recover_prng_state_v5(uint32_t accessAddress, uint32_t crcInit, uint
 
 static void sniff_conn_req(uint8_t adv_channel)
 {
+
+  /* test purpose: determine interval. */
+  g_sniffer.follow_advert = true;
+  g_sniffer.follow_advert_state = FOLLOW_ADV_CALIB;
+  g_sniffer.channel = 37;
+
   /* Start connect_req sniffing. */
   g_sniffer.action = SNIFF_CONNECT_REQ;
+  //g_sniffer.channel = adv_channel;
 
   /* Configure radio to receive packets on advertisement channels. */
   radio_follow_conn(0x8E89BED6, adv_channel, 0x555555);
