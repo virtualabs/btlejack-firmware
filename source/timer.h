@@ -49,5 +49,7 @@ int16_t timer_init(void);
 int16_t timer_create(uint8_t type);
 int16_t timer_destroy(int16_t id);
 int16_t timer_start(int16_t id, uint32_t us, timer_cb_t cb);
+void timer_start_no_cb(void);
 int16_t timer_stop(int16_t id);
+void timer_stop_no_cb(void);
 uint32_t timer_get_remaining_us(int16_t id);

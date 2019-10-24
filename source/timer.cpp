@@ -206,6 +206,31 @@ int16_t timer_destroy(int16_t id)
 	return 0;
 }
 
+void timer_start_no_cb(void)
+{
+	if (active == 0)
+	{
+		NRF_TIMER2->TASKS_START = 1UL;
+		active++;
+	}
+}
+
+void timer_stop_no_cb(void)
+{
+	uint32_t clr_mask = 0;
+	uint32_t set_mask = 0;
+
+	get_clr_set_masks(id, &clr_mask, &set_mask);
+	NRF_TIMER2->INTENCLR = clr_mask;
+
+	active--;
+
+	if (active == 0) {
+		NRF_TIMER2->TASKS_STOP = 1UL;
+		NRF_TIMER2->TASKS_CLEAR = 1UL;
+	}
+}
+
 int16_t timer_start(int16_t id, uint32_t us, timer_cb_t cb)
 {
 	uint32_t curr = get_curr_ticks();
