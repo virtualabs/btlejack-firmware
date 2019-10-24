@@ -94,9 +94,6 @@ typedef struct tSnifferState {
     uint8_t bd_address[6];
     bool follow_advert;
     follow_adv_t follow_advert_state = FOLLOW_ADV_DISABLED;
-    uint32_t follow_adv_interval = 0;
-    uint32_t ticks37, ticks39, adv_count;
-    int16_t adv_timer;
 
     /* Connection parameters update. */
     bool expect_cp_update;
@@ -172,7 +169,6 @@ typedef struct tSnifferState {
 } sniffer_state_t;
 
 static sniffer_state_t g_sniffer;
-//static uint8_t hexbuf[23];
 static uint32_t measures;
 static uint32_t hops;
 uint8_t rx_buffer[254];                     /* Rx buffer used by RF to store packets. */
@@ -233,6 +229,15 @@ void hop_tick()
     measures++;
 }
 
+
+/**
+ * next_adv_channel
+ *
+ * This callback is used to switch to the next advertising channel while
+ * sniffing CONNECT_REQ packets.
+ *
+ **/
+
 void next_adv_channel(void)
 {
   g_sniffer.ticker.detach();
@@ -248,14 +253,11 @@ void next_adv_channel(void)
 
     /* Listen on this new channel, takes ~138us to switch. */
     radio_set_channel_fast(g_sniffer.channel);
-    //radio_follow_conn(0x8E89BED6, g_sniffer.channel, 0x555555);
   }
   else
   {
     g_sniffer.channel = 37;
     radio_set_channel_fast(g_sniffer.channel);
-    //radio_follow_conn(0x8E89BED6, g_sniffer.channel, 0x555555);
-    //timer_stop(g_sniffer.adv_timer);
   }
 }
 
