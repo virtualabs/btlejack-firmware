@@ -1,0 +1,12 @@
+{
+  "txpin": "P0_9",
+  "rxpin": "P0_11",
+
+  "nrf51822": {
+    "ram_size": "16K"
+  },
+
+  "image": {
+    "fota": true
+  }
+}
