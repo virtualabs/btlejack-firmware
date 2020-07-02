@@ -220,7 +220,7 @@ void timer_stop_no_cb(void)
 	uint32_t clr_mask = 0;
 	uint32_t set_mask = 0;
 
-	get_clr_set_masks(id, &clr_mask, &set_mask);
+	// get_clr_set_masks(id, &clr_mask, &set_mask);
 	NRF_TIMER2->INTENCLR = clr_mask;
 
 	active--;
