@@ -8,7 +8,11 @@ Link::Link(MicroBit *ubit)
   m_bit = ubit;
 
   /* Upgrade the default tx buffer. */
-  m_serial->baud(115200);
+  #if defined(YOTTA_CFG_BAUD)
+    m_serial->baud(YOTTA_CFG_BAUD);
+  #else
+      m_serial->baud(115200);
+  #endif
   m_serial->setTxBufferSize(254);
   m_serial->setRxBufferSize(254);
 
