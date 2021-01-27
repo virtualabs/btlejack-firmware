@@ -1,10 +1,15 @@
 YOTTA=yt
 
-all:	ble400 microbit
+all:	ble400 bornhack2018 microbit
 
 ble400: dist .yotta.json
 	$(YOTTA) build --config config/ble400.json
 	cp build/bbc-microbit-classic-gcc/source/ubit-ble-sniffer-combined.hex dist/btlejack-firmware-ble400.hex
+	$(YOTTA) clean
+
+bornhack2018: dist .yotta.json
+	$(YOTTA) build --config config/bornhack2018.json
+	cp build/bbc-microbit-classic-gcc/source/ubit-ble-sniffer-combined.hex dist/btlejack-firmware-bornhack2018.hex
 	$(YOTTA) clean
 
 microbit: dist .yotta.json
