@@ -80,7 +80,7 @@ typedef struct tSnifferState {
     uint8_t count_aa[MAX_QUEUE_LEN];
     uint8_t n_aa;
     uint32_t crcinit;
-    uint16_t hop_interval;
+    uint32_t hop_interval;
     bool interval_provided;
     uint32_t hop_increment;
     uint8_t n;
@@ -187,7 +187,7 @@ static void recover_hop_inc(void);
 static void follow_connection(void);
 static void sync_connection(void);
 static void reset(void);
-static void set_timer_for_next_anchor(uint16_t interval);
+static void set_timer_for_next_anchor(uint32_t interval);
 static void sync_lost_track(void);
 static void hijack_hop_channel(void);
 static void hijack_prepare_packet(void);
@@ -1857,7 +1857,7 @@ static void sync_hop_channel(void)
  * callback is used to synchronize with Master and optimize sniffing.
  **/
 
-static void set_timer_for_next_anchor(uint16_t interval)
+static void set_timer_for_next_anchor(uint32_t interval)
 {
   g_sniffer.ticker.detach();
   g_sniffer.hj_ticker.detach();
