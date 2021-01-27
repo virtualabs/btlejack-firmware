@@ -215,7 +215,7 @@ void timer_start_no_cb(void)
 	}
 }
 
-void timer_stop_no_cb(void)
+void timer_stop_no_cb(int16_t id)
 {
 	uint32_t clr_mask = 0;
 	uint32_t set_mask = 0;
