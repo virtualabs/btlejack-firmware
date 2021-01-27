@@ -2,12 +2,13 @@
 
 This repository contains the firmware source code used by Btlejack to communicate and attack BLE connections with Micro:Bit devices.
 
-Two versions of this firmware can be compiled:
+Three versions of this firmware can be compiled:
 
  * a version for the BBC Micro:Bit
  * a version for BLE400 and Adafruit's Bluefruit LE boards
+ * a version for nRF51 usb dongle PCA10031
 
-To compile these two versions:
+To compile these three versions:
 
 ```
 $ make all
