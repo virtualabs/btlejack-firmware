@@ -495,11 +495,6 @@ extern "C" void RADIO_IRQHandler(void)
     char msg[70];
     int i,j;
 
-    if (NRF_RADIO->EVENTS_READY) {
-        NRF_RADIO->EVENTS_READY = 0;
-        NRF_RADIO->TASKS_START = 1;
-    }
-
     if (NRF_RADIO->EVENTS_END) {
         NRF_RADIO->EVENTS_END = 0;
 
@@ -1702,8 +1697,12 @@ static void sync_lost_track(void)
 
     // enable receiver (once enabled, it will listen)
     NRF_RADIO->EVENTS_READY = 0;
-    NRF_RADIO->EVENTS_END = 0;
     NRF_RADIO->TASKS_RXEN = 1;
+    while (NRF_RADIO->EVENTS_READY == 0);
+  
+    NRF_RADIO->EVENTS_END = 0;
+    NRF_RADIO->TASKS_START = 1;
+
   }
 
 #if 0
@@ -1845,8 +1844,11 @@ static void sync_hop_channel(void)
 
   // enable receiver (once enabled, it will listen)
   NRF_RADIO->EVENTS_READY = 0;
-  NRF_RADIO->EVENTS_END = 0;
   NRF_RADIO->TASKS_RXEN = 1;
+  while (NRF_RADIO->EVENTS_READY == 0);
+
+  NRF_RADIO->EVENTS_END = 0;
+  NRF_RADIO->TASKS_START = 1;
 }
 
 
