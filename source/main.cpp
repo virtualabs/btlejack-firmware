@@ -524,7 +524,7 @@ extern "C" void RADIO_IRQHandler(void)
               }
               else
               {
-                /* Shit right by one bit once and twice */
+                /* Shift right by one bit once and twice */
                 for (j=0; j<2; j++)
                 {
                   /* Shift right. */
@@ -543,6 +543,7 @@ extern "C" void RADIO_IRQHandler(void)
                       if (seen_aa(aa) > 1) {
                           /* We may have a candidate AA. */
                           pLink->notifyAccessAddress(aa, g_sniffer.channel, NRF_RADIO->RSSISAMPLE);
+                          break;
                       }
                   }
                 }
